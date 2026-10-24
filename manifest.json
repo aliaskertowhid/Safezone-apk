@@ -1,0 +1,20 @@
+{
+  "name": "SafeZone Protection Field Reporting",
+  "short_name": "SafeZone",
+  "description": "Native Daily & Special Occurrence Reporting System for SafeZone Protection Inc.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B1120",
+  "theme_color": "#0B1120",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2092/2092663.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

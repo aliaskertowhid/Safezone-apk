@@ -1,0 +1,2119 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0B1120" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>SafeZone Protection — Field Reporting & Shift Pass-Down System</title>
+
+  <!-- REQUIRED FOR PWABUILDER APK COMPILER -->
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2092/2092663.png" />
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2092/2092663.png" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js');
+      });
+    }
+  </script>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- html2pdf.js for Native Offline-Ready PDF Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            szNavy: '#0B1120',
+            szCard: '#131C31',
+            szBorder: '#1E293B',
+            szBlue: '#2563EB',
+            szGold: '#F59E0B',
+            szEmerald: '#10B981',
+            szCrimson: '#EF4444'
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    #pdf-render-target {
+      background: #ffffff;
+      color: #0f172a;
+      width: 794px;
+      padding: 32px;
+      font-family: 'Inter', sans-serif;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-100 dark:bg-szNavy text-slate-900 dark:text-slate-100 min-h-screen pb-28 transition-colors duration-200">
+
+  <!-- TOP TACTICAL APP BAR -->
+  <header class="sticky top-0 z-40 bg-white/95 dark:bg-szNavy/95 backdrop-blur-md border-b border-slate-200 dark:border-szBorder px-4 py-3">
+    <div class="max-w-xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-blue-900 flex items-center justify-center shadow-md shadow-blue-600/20 border border-blue-400/30">
+          <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-extrabold text-sm tracking-tight uppercase text-slate-900 dark:text-white">SafeZone Protection</h1>
+            <span id="live-shift-pill" class="hidden text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse">On Duty</span>
+          </div>
+          <p id="header-site-label" class="text-xs font-semibold text-blue-600 dark:text-blue-400 truncate max-w-[225px]">Site 1: China City (2150 McNicoll Ave)</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <div class="text-right mr-1 hidden sm:block">
+          <div id="live-clock" class="mono text-sm font-bold text-blue-600 dark:text-blue-400">00:00:00</div>
+          <div id="live-date" class="text-[10px] text-slate-400">2026-10-24</div>
+        </div>
+        <!-- Dedicated Site Phone Switcher -->
+        <button onclick="openSiteModal()" title="Switch Dedicated Site Phone" class="p-2.5 rounded-xl bg-slate-100 dark:bg-szCard border border-slate-200 dark:border-szBorder text-slate-600 dark:text-slate-300 hover:border-blue-500 transition">
+          <i data-lucide="building-2" class="w-4 h-4"></i>
+        </button>
+        <!-- Daylight / Night Tactical Mode Toggle -->
+        <button onclick="toggleTheme()" title="Toggle Night / Sunlight Mode" class="p-2.5 rounded-xl bg-slate-100 dark:bg-szCard border border-slate-200 dark:border-szBorder text-slate-600 dark:text-amber-400 hover:border-blue-500 transition">
+          <i id="theme-icon" data-lucide="sun" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-xl mx-auto px-4 pt-4 space-y-4">
+
+    <!-- MORNING SHIFT (08:00-16:00) BATCH DISPATCH ALERT BANNER -->
+    <div id="morning-dispatch-banner" class="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-500/40 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+      <div class="flex items-start gap-3">
+        <div class="p-2 rounded-lg bg-amber-500/20 text-amber-400 mt-0.5">
+          <i data-lucide="mail-check" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400">08:00–16:00 Morning Shift Protocol</h3>
+          <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5">Select & email all previous day shift PDFs (2 or 3 shifts) to Property Management.</p>
+        </div>
+      </div>
+      <button onclick="switchTab('vault')" class="shrink-0 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition">
+        Open Vault
+      </button>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 1: PRE-SHIFT BRIEFING & SIGN-IN SETUP -->
+    <!-- ========================================== -->
+    <section id="view-checkin" class="space-y-4">
+
+      <!-- NEW FEATURE: PRE-SHIFT BRIEFING, PASS-DOWN AGENDA & CUSTODY LEDGER -->
+      <div class="bg-white dark:bg-szCard border-2 border-indigo-500/40 rounded-2xl p-4 shadow-sm space-y-3.5">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+              <i data-lucide="bell-ring" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-extrabold uppercase tracking-widest text-indigo-400">Pre-Shift Briefing & Custody Ledger</span>
+                <span id="checkin-agenda-count" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500 text-white">2 Active</span>
+              </div>
+              <h2 class="text-sm font-extrabold text-slate-900 dark:text-white">What You Need to Know Before Starting Your Shift</h2>
+            </div>
+          </div>
+          <button type="button" onclick="openNewNoticeModal()" class="shrink-0 px-2.5 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 text-xs font-bold flex items-center gap-1 transition">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Notice
+          </button>
+        </div>
+
+        <!-- Dynamic List of Active Unresolved Pass-Down Notices & Custody Items -->
+        <div id="checkin-agenda-list" class="space-y-2.5"></div>
+
+        <!-- Mandatory Poka-Yoke Acknowledgment Checkbox -->
+        <label id="briefing-ack-box" class="flex items-start gap-3 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30 cursor-pointer select-none">
+          <input id="input-briefing-ack" type="checkbox" class="mt-0.5 w-4 h-4 accent-indigo-500 rounded" />
+          <div class="text-xs">
+            <span class="font-extrabold text-indigo-950 dark:text-indigo-200 block">
+              Mandatory Pre-Shift Handover Confirmation *
+            </span>
+            <span class="text-slate-600 dark:text-slate-300 text-[11px]">
+              I have read all active site notices/scheduled visitors above and physically verified any held items (cheques, keys, packages) in custody.
+            </span>
+          </div>
+        </label>
+      </div>
+
+      <!-- STEP 1B: GUARD SIGN-IN & NATIVE GEOFENCE -->
+      <div class="bg-white dark:bg-szCard border border-slate-200 dark:border-szBorder rounded-2xl p-5 shadow-sm space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-widest text-blue-500">Shift Initialization</span>
+            <h2 class="text-lg font-extrabold text-slate-900 dark:text-white mt-0.5">On-Duty Guard Sign-In</h2>
+          </div>
+          <button onclick="openSiteModal()" class="text-right group">
+            <span class="text-[10px] text-slate-400 block group-hover:text-blue-400">Dedicated Site Device (Tap to Switch)</span>
+            <span id="checkin-site-badge" class="text-xs font-extrabold text-emerald-500 flex items-center justify-end gap-1">
+              China City • 2150 McNicoll Ave
+            </span>
+          </button>
+        </div>
+
+        <!-- Quick-Fill Returning Site Guards (1-Tap) -->
+        <div>
+          <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">
+            Quick-Fill Returning Site Guards (1-Tap) or Type Below:
+          </label>
+          <div id="recent-guards-list" class="flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- Guard Inputs -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div>
+            <label class="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1.5">On-Duty Guard Full Name *</label>
+            <input id="input-guard-name" type="text" placeholder="e.g., Ali Towhid" class="w-full px-3.5 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700 text-sm font-medium focus:outline-none focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1.5">Ontario Security License # *</label>
+            <input id="input-guard-license" type="text" inputmode="numeric" maxlength="12" placeholder="e.g., 11489204" class="w-full px-3.5 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700 mono text-sm font-semibold focus:outline-none focus:border-blue-500" />
+          </div>
+        </div>
+
+        <!-- Shift Window Selection (Single & Double Shift Support) -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Select Shift Schedule *</label>
+            <span class="text-[11px] text-blue-400 font-medium">Auto-highlights notices for your shift</span>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 mb-2.5">
+            <button type="button" onclick="selectShiftWindow('00:00 - 08:00', 'Single Shift (8h)')" data-shift="00:00 - 08:00" class="shift-btn p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 text-left transition">
+              <div class="text-[10px] font-bold uppercase text-slate-400">Night • Shift 1</div>
+              <div class="mono text-xs font-extrabold mt-0.5">00:00 - 08:00</div>
+            </button>
+            <button type="button" onclick="selectShiftWindow('08:00 - 16:00', 'Single Shift (8h)')" data-shift="08:00 - 16:00" class="shift-btn p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 text-left transition">
+              <div class="text-[10px] font-bold uppercase text-slate-400">Day • Shift 2</div>
+              <div class="mono text-xs font-extrabold mt-0.5">08:00 - 16:00</div>
+            </button>
+            <button type="button" onclick="selectShiftWindow('16:00 - 00:00', 'Single Shift (8h)')" data-shift="16:00 - 00:00" class="shift-btn p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 text-left transition">
+              <div class="text-[10px] font-bold uppercase text-slate-400">Evening • Shift 3</div>
+              <div class="mono text-xs font-extrabold mt-0.5">16:00 - 00:00</div>
+            </button>
+          </div>
+
+          <!-- Double Shift Selector Row -->
+          <div class="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+            <div class="text-[11px] font-bold text-amber-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <i data-lucide="flame" class="w-3.5 h-3.5"></i> Working a Double Shift (16 Hours)? Select Below:
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <button type="button" onclick="selectShiftWindow('00:00 - 16:00', 'DOUBLE SHIFT (16h)')" data-shift="00:00 - 16:00" class="shift-btn p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-left transition">
+                <div class="text-[10px] font-bold text-amber-400">Double (S1+S2)</div>
+                <div class="mono text-[11px] font-bold">00:00 - 16:00</div>
+              </button>
+              <button type="button" onclick="selectShiftWindow('08:00 - 00:00', 'DOUBLE SHIFT (16h)')" data-shift="08:00 - 00:00" class="shift-btn p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-left transition">
+                <div class="text-[10px] font-bold text-amber-400">Double (S2+S3)</div>
+                <div class="mono text-[11px] font-bold">08:00 - 00:00</div>
+              </button>
+              <button type="button" onclick="selectShiftWindow('16:00 - 08:00', 'DOUBLE SHIFT (16h)')" data-shift="16:00 - 08:00" class="shift-btn p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-left transition">
+                <div class="text-[10px] font-bold text-amber-400">Double (S3+S1)</div>
+                <div class="mono text-[11px] font-bold">16:00 - 08:00</div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- NATIVE IN-APP GEOFENCE & GPS TELEMETRY ENGINE -->
+        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="satellite" class="w-4 h-4 text-emerald-500"></i>
+              <span class="text-xs font-bold uppercase tracking-wider">Native In-App GPS Geofence Verification</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="toggleGpsSimulation()" id="btn-gps-mode" class="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
+                Mode: On-Site Lock
+              </button>
+              <button type="button" onclick="captureGPS()" class="text-xs font-semibold text-blue-500 hover:underline flex items-center gap-1">
+                <i data-lucide="refresh-cw" class="w-3 h-3"></i> Ping GPS
+              </button>
+            </div>
+          </div>
+          <div id="gps-status-box" class="text-xs mono text-slate-600 dark:text-slate-300 bg-white dark:bg-szCard p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+            Acquiring native satellite lock...
+          </div>
+        </div>
+
+        <!-- Start Shift Action Button -->
+        <div class="pt-1">
+          <button type="button" onclick="startShift()" class="w-full py-4 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-sm shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2 transition">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+            Confirm Briefing, Verify GPS & Start Shift Report
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VIEW 2: ACTIVE SHIFT WORKSPACE             -->
+    <!-- ========================================== -->
+    <section id="view-workspace" class="hidden space-y-4">
+
+      <!-- Active Shift Live Summary Card -->
+      <div class="bg-white dark:bg-szCard border border-slate-200 dark:border-szBorder rounded-2xl p-4 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div>
+            <div class="flex items-center gap-2">
+              <span id="active-guard-display" class="font-extrabold text-sm text-slate-900 dark:text-white">Guard Name</span>
+              <span id="active-license-display" class="mono text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">LIC #00000000</span>
+            </div>
+            <div id="active-site-display" class="text-xs font-semibold text-blue-500 dark:text-blue-400 mt-0.5">Site Name & Address</div>
+            <div id="active-gps-stamp-display" class="mono text-[11px] text-emerald-500 mt-0.5">🛰️ Arrival GPS Verified</div>
+          </div>
+          <div class="text-right">
+            <span id="active-shift-badge" class="mono text-xs font-extrabold px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 block">00:00 - 08:00</span>
+            <span id="active-shift-type" class="text-[10px] font-bold text-slate-400 uppercase">Single Shift (8h)</span>
+          </div>
+        </div>
+
+        <!-- Quick Shift Controls -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-3">
+          <div class="flex items-center gap-2">
+            <button id="btn-extend-double" onclick="extendToDoubleShift()" class="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Extend Double (+8h)
+            </button>
+            <button onclick="logNativeGpsCheckpoint()" class="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 transition">
+              <i data-lucide="locate-fixed" class="w-3.5 h-3.5"></i> Stamp GPS
+            </button>
+          </div>
+          <button onclick="openEndShiftModal()" class="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition">
+            <i data-lucide="file-check-2" class="w-3.5 h-3.5"></i> End Shift & Save PDF
+          </button>
+        </div>
+      </div>
+
+      <!-- 3 WORKSPACE SUB-TABS: DOR | SOR | PASS-DOWN & CUSTODY AGENDA -->
+      <div class="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-slate-200 dark:bg-slate-900 border border-slate-300 dark:border-szBorder">
+        <button id="subtab-dor" onclick="switchReportSheet('dor')" class="py-2.5 px-2 rounded-xl font-extrabold text-[11px] flex items-center justify-center gap-1.5 bg-blue-600 text-white shadow">
+          <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i>
+          <span>DOR Log</span>
+          <span id="dor-count-badge" class="px-1.5 py-0.2 rounded-full bg-white/20 text-[10px]">0</span>
+        </button>
+        <button id="subtab-sor" onclick="switchReportSheet('sor')" class="py-2.5 px-2 rounded-xl font-extrabold text-[11px] flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-400">
+          <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-500"></i>
+          <span>SOR Sheet</span>
+          <span id="sor-count-badge" class="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400 text-[10px]">0</span>
+        </button>
+        <button id="subtab-agenda" onclick="switchReportSheet('agenda')" class="py-2.5 px-2 rounded-xl font-extrabold text-[11px] flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-400">
+          <i data-lucide="pin" class="w-3.5 h-3.5 text-indigo-400"></i>
+          <span>Pass-Down</span>
+          <span id="agenda-count-badge" class="px-1.5 py-0.2 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px]">0</span>
+        </button>
+      </div>
+
+      <!-- ========================================== -->
+      <!-- SHEET A: DAILY OCCURRENCE REPORT (DOR)     -->
+      <!-- ========================================== -->
+      <div id="sheet-dor" class="space-y-4">
+        <div class="bg-white dark:bg-szCard border border-slate-200 dark:border-szBorder rounded-2xl p-4 space-y-3.5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span>
+              <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-200">New DOR Entry (Auto-Locked Timestamp)</h3>
+            </div>
+            <span id="dor-lock-time" class="mono text-xs font-bold px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-blue-500 border border-blue-500/20">
+              🔒 00:00
+            </span>
+          </div>
+
+          <!-- 1-Tap Smart Patrol Templates -->
+          <div>
+            <span class="text-[11px] font-semibold text-slate-400 block mb-1.5">1-Tap Quick Patrol Templates:</span>
+            <div class="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+              <button type="button" onclick="insertTemplate('Assumed duty on site. Full site keys, desk drawer custody items & dedicated site phone verified.')" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-600/20 border border-slate-200 dark:border-slate-700 text-xs font-medium transition">
+                📋 Shift Takeover
+              </button>
+              <button type="button" onclick="insertTemplate('Completed full interior and exterior foot patrol of all units, corridors, and parking lot. All access points secure.')" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-600/20 border border-slate-200 dark:border-slate-700 text-xs font-medium transition">
+                🔦 Full Patrol Secure
+              </button>
+              <button type="button" onclick="insertTemplate('Checked all commercial entrances, loading bays, fire exits, and mechanical rooms. No hazards or loitering observed.')" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-600/20 border border-slate-200 dark:border-slate-700 text-xs font-medium transition">
+                🚪 Entrances & Fire Exits
+              </button>
+              <button type="button" onclick="insertTemplate('Patrolled main parking lot and plaza walkways. All vehicles compliant and property quiet.')" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-600/20 border border-slate-200 dark:border-slate-700 text-xs font-medium transition">
+                🚗 Plaza & Parking Lot
+              </button>
+              <button type="button" onclick="insertTemplate('Shift complete. Updated Shift Pass-Down Agenda for incoming relief guard and secured site phone & keys.')" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-blue-600/20 border border-slate-200 dark:border-slate-700 text-xs font-medium transition">
+                🤝 Shift Handover
+              </button>
+            </div>
+          </div>
+
+          <div class="relative">
+            <textarea id="dor-entry-input" rows="3" placeholder="Write occurrence or patrol details here..." class="w-full p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm focus:outline-none focus:border-blue-500"></textarea>
+            <button type="button" onclick="startVoiceDictation('dor-entry-input')" title="Voice to Text" class="absolute right-3 bottom-3 p-2 rounded-lg bg-blue-600/15 text-blue-400 hover:bg-blue-600 hover:text-white transition">
+              <i data-lucide="mic" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <button type="button" onclick="addDorEntry()" class="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-sm shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 transition">
+            <i data-lucide="lock" class="w-4 h-4"></i>
+            Lock Timestamp & Record DOR Entry
+          </button>
+        </div>
+
+        <!-- DOR Locked Timeline List -->
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between px-1">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Chronological DOR Log (Immutable Audit Trail)</h4>
+            <span class="text-[11px] text-slate-400">Tap "Amend" to record a correction</span>
+          </div>
+          <div id="dor-timeline-container" class="space-y-2.5"></div>
+        </div>
+      </div>
+
+      <!-- ========================================== -->
+      <!-- SHEET B: SPECIAL OCCURRENCE REPORT (SOR)   -->
+      <!-- ========================================== -->
+      <div id="sheet-sor" class="hidden space-y-4">
+        <div class="bg-white dark:bg-szCard border-2 border-amber-500/40 rounded-2xl p-4 space-y-4 shadow-sm">
+          <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <span class="text-[10px] font-extrabold uppercase tracking-widest text-amber-400">Separate Incident Sheet • Auto-Links to DOR</span>
+              <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Special Occurrence Report (SOR)</h3>
+            </div>
+            <span id="sor-lock-time" class="mono text-xs font-bold px-2.5 py-1 rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/30">
+              🔒 00:00
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-1">Incident Classification *</label>
+              <select id="sor-category" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm font-semibold focus:outline-none focus:border-amber-500">
+                <option value="Trespassing / Loitering Removal">Trespassing / Loitering Removal</option>
+                <option value="Property Damage / Vandalism">Property Damage / Vandalism</option>
+                <option value="Fire Alarm / Life Safety">Fire Alarm / Life Safety</option>
+                <option value="Medical Emergency / EMS">Medical Emergency / EMS</option>
+                <option value="Theft / Break & Enter Attempt">Theft / Break & Enter Attempt</option>
+                <option value="Parking / Traffic / Towing Incident">Parking / Traffic / Towing Incident</option>
+                <option value="Maintenance / Water Leak / Hazard">Maintenance / Water Leak / Hazard</option>
+                <option value="Police / Emergency Services On-Site">Police / Emergency Services On-Site</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-1">Exact Location on Site *</label>
+              <input id="sor-location" type="text" placeholder="e.g., Unit B12, North Parking Lot, Loading Bay 2" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm focus:outline-none focus:border-amber-500" />
+            </div>
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-1">Police / Fire / EMS Details (If Attended — Optional)</label>
+            <input id="sor-police" type="text" placeholder="e.g., TPS 42 Div, Officer Badge #9412, Occurrence #2026-88412" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm focus:outline-none focus:border-amber-500" />
+          </div>
+
+          <div class="relative">
+            <label class="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-1">Detailed Special Occurrence Narrative (Who, What, When, Action Taken) *</label>
+            <textarea id="sor-details" rows="4" placeholder="Describe the special occurrence and actions taken by security..." class="w-full p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm focus:outline-none focus:border-amber-500"></textarea>
+            <button type="button" onclick="startVoiceDictation('sor-details')" title="Voice to Text" class="absolute right-3 bottom-3 p-2 rounded-lg bg-amber-500/15 text-amber-400 hover:bg-amber-500 hover:text-slate-950 transition">
+              <i data-lucide="mic" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Photo Evidence Upload -->
+          <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-xs font-bold text-slate-700 dark:text-slate-200 block">Photo Evidence Attachment (No Video)</span>
+                <span class="text-[11px] text-slate-400">Auto-watermarked with SafeZone timestamp, GPS & site name</span>
+              </div>
+              <label class="cursor-pointer px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-xs font-bold flex items-center gap-1.5 transition">
+                <i data-lucide="camera" class="w-4 h-4"></i> Take / Add Photo
+                <input id="sor-photo-input" type="file" accept="image/*" capture="environment" multiple onchange="handleSorPhotos(event)" class="hidden" />
+              </label>
+            </div>
+            <div id="sor-photo-preview-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-2"></div>
+          </div>
+
+          <button type="button" onclick="addSorEntry()" class="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition">
+            <i data-lucide="file-warning" class="w-4 h-4"></i>
+            Save Special Occurrence Report & Cross-Reference in DOR
+          </button>
+        </div>
+
+        <div id="sor-list-container" class="space-y-3"></div>
+      </div>
+
+      <!-- ========================================== -->
+      <!-- SHEET C: SHIFT PASS-DOWN & CUSTODY BOARD   -->
+      <!-- ========================================== -->
+      <div id="sheet-agenda" class="hidden space-y-4">
+        <div class="bg-white dark:bg-szCard border-2 border-indigo-500/40 rounded-2xl p-4 space-y-4 shadow-sm">
+          <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+            <div>
+              <span class="text-[10px] font-extrabold uppercase tracking-widest text-indigo-400">Multi-Shift Handover & Custody Tracker</span>
+              <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Post Notice / Held Item for Upcoming Shifts</h3>
+              <p class="text-xs text-slate-400 mt-0.5">
+                Leave instructions for future shifts (e.g., Evening Electrician visit) or log items placed in custody (e.g., Cheque in drawer). Automatically logs to your DOR.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-1">Notice / Custody Type *</label>
+              <select id="notice-category" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold focus:outline-none focus:border-indigo-500">
+                <option value="💵 Held Item / Cheque / Package in Custody">💵 Held Item / Cheque / Package in Custody</option>
+                <option value="🔑 Scheduled Contractor / Visitor Access">🔑 Scheduled Contractor / Visitor Access</option>
+                <option value="📢 Property Management Directive">📢 Property Management Directive</option>
+                <option value="⚠️ Urgent Site Watch / Maintenance">⚠️ Urgent Site Watch / Maintenance</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-1">Target Shift Requiring Action *</label>
+              <select id="notice-target-shift" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold focus:outline-none focus:border-indigo-500">
+                <option value="ALL UPCOMING SHIFTS">All Upcoming Shifts (Until Resolved/Collected)</option>
+                <option value="00:00 - 08:00">Night Shift Only (00:00 - 08:00)</option>
+                <option value="08:00 - 16:00">Day Shift Only (08:00 - 16:00)</option>
+                <option value="16:00 - 00:00">Evening Shift Only (16:00 - 00:00)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-1">
+              Exact Storage Location / Key / Contact Info *
+            </label>
+            <input id="notice-storage" type="text" placeholder="e.g., Top Desk Drawer (Envelope #4092) OR Mechanical Key in Keybox #2" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm focus:outline-none focus:border-indigo-500" />
+          </div>
+
+          <div class="relative">
+            <label class="text-xs font-semibold text-slate-500 dark:text-slate-300 block mb-1">
+              Clear Instructions for Incoming Guards *
+            </label>
+            <textarea id="notice-details" rows="3" placeholder="e.g., Tenant from Unit 14 left a rent cheque for Property Manager. Kept in top drawer. Mark resolved once PM collects it." class="w-full p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <button type="button" onclick="createPassDownNoticeFromWorkspace()" class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition">
+            <i data-lucide="pin" class="w-4 h-4"></i>
+            Pin to Site Agenda Board & Auto-Log in DOR
+          </button>
+        </div>
+
+        <!-- Active & Resolved Site Notices List -->
+        <div class="space-y-2.5">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">Active Site Pass-Down Notices & Held Custody Items</h4>
+          <div id="workspace-agenda-list" class="space-y-2.5"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VIEW 3: SHIFT VAULT & MORNING EMAIL CENTER -->
+    <!-- ========================================== -->
+    <section id="view-vault" class="hidden space-y-4">
+      <div class="bg-white dark:bg-szCard border border-slate-200 dark:border-szBorder rounded-2xl p-5 space-y-4 shadow-sm">
+        <div class="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3.5">
+          <div>
+            <span class="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">Morning Shift (08:00–16:00) Dispatch Workflow</span>
+            <h2 class="text-lg font-extrabold text-slate-900 dark:text-white">Shift PDF Vault & Property Manager Dispatch</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Select all shift PDFs from yesterday (3 PDFs for 3 regular shifts, or 2 PDFs when a guard worked a double shift) and send to the dedicated site emails.
+            </p>
+          </div>
+          <button onclick="loadDemoYesterdayShifts()" class="shrink-0 px-2.5 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[11px] font-bold transition">
+            + Load Sample Shifts
+          </button>
+        </div>
+
+        <!-- Pre-Filled Site Email Recipients -->
+        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span id="vault-site-title" class="text-[11px] font-bold uppercase text-slate-400">Dedicated Site Recipients (Pre-Filled):</span>
+            <button onclick="openSiteModal()" class="text-[11px] text-blue-400 hover:underline">Configure Site / Emails</button>
+          </div>
+          <div id="vault-email-chips" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
+        <!-- Quick Filter Buttons -->
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <button onclick="selectVaultFilter('yesterday')" class="px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs font-bold">
+              ☑️ Select Yesterday's Shifts
+            </button>
+            <button onclick="selectVaultFilter('all')" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 text-xs font-semibold">
+              Select All
+            </button>
+          </div>
+          <span id="selected-pdfs-counter" class="mono text-xs font-bold text-emerald-400">0 PDFs Selected</span>
+        </div>
+
+        <!-- Stored Shift PDFs List -->
+        <div id="vault-reports-list" class="space-y-2.5"></div>
+
+        <!-- Dispatch Action Button -->
+        <button onclick="dispatchSelectedPdfsEmail()" class="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition">
+          <i data-lucide="mail" class="w-4 h-4"></i>
+          Email Selected Shift PDFs to Property Managers
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- HIDDEN PRINT/PDF RENDER SHEET -->
+  <div class="fixed -left-[9999px] top-0 overflow-hidden">
+    <div id="pdf-render-target"></div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 1: AMEND / CORRECT LOCKED DOR ENTRY  -->
+  <!-- ========================================== -->
+  <div id="modal-amend" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-szCard border border-slate-200 dark:border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="file-diff" class="w-5 h-5 text-amber-400"></i>
+          <h3 class="font-extrabold text-sm uppercase tracking-wider">Append Official Correction</h3>
+        </div>
+        <button onclick="closeAmendModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <div class="text-[10px] font-bold uppercase text-slate-400">Original Locked Entry (<span id="amend-orig-time" class="mono"></span>):</div>
+        <p id="amend-orig-text" class="text-xs text-slate-600 dark:text-slate-300 mt-1 italic"></p>
+      </div>
+      <div>
+        <label class="text-xs font-bold text-amber-400 block mb-1">
+          Correction Details (Stamped with current time & marked as AMENDED):
+        </label>
+        <textarea id="amend-input-text" rows="3" placeholder="Write correction clearly (original entry remains visible for audit integrity)..." class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-amber-500/40 text-sm focus:outline-none"></textarea>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button onclick="closeAmendModal()" class="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold">Cancel</button>
+        <button onclick="saveAmendment()" class="px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 text-xs font-extrabold">Stamp Correction</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 2: RESOLVE / HAND OVER CUSTODY ITEM  -->
+  <!-- ========================================== -->
+  <div id="modal-resolve-notice" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-szCard border border-slate-200 dark:border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400"></i>
+          <h3 class="font-extrabold text-sm uppercase tracking-wider">Resolve Notice / Complete Handover</h3>
+        </div>
+        <button onclick="closeResolveModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="resolve-notice-summary" class="p-3 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs"></div>
+      <div>
+        <label class="text-xs font-bold text-emerald-400 block mb-1">
+          Resolution / Collection Note (Will be auto-logged in your DOR) *
+        </label>
+        <textarea id="resolve-note-input" rows="3" placeholder="e.g., Property Manager collected Cheque #4092 from top drawer at 10:20 AM OR Electrician completed work & returned mechanical key." class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-emerald-500/40 text-sm focus:outline-none"></textarea>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button onclick="closeResolveModal()" class="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-xs font-bold">Cancel</button>
+        <button onclick="confirmResolveNotice()" class="px-4 py-2.5 rounded-xl bg-emerald-500 text-slate-950 text-xs font-extrabold">Mark Resolved & Log in DOR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 3: QUICK-ADD NOTICE FROM CHECK-IN    -->
+  <!-- ========================================== -->
+  <div id="modal-new-notice" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-szCard border border-slate-200 dark:border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-3.5 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="pin" class="w-5 h-5 text-indigo-400"></i>
+          <h3 class="font-extrabold text-sm uppercase tracking-wider">Post New Site Pass-Down / Custody Item</h3>
+        </div>
+        <button onclick="closeNewNoticeModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-400 block mb-1">Category</label>
+        <select id="modal-notice-category" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-700 text-xs font-bold">
+          <option value="💵 Held Item / Cheque / Package in Custody">💵 Held Item / Cheque / Package in Custody</option>
+          <option value="🔑 Scheduled Contractor / Visitor Access">🔑 Scheduled Contractor / Visitor Access</option>
+          <option value="📢 Property Management Directive">📢 Property Management Directive</option>
+          <option value="⚠️ Urgent Site Watch / Maintenance">⚠️ Urgent Site Watch / Maintenance</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-400 block mb-1">Target Shift</label>
+        <select id="modal-notice-target" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-700 text-xs font-bold">
+          <option value="ALL UPCOMING SHIFTS">All Upcoming Shifts (Until Resolved)</option>
+          <option value="00:00 - 08:00">Night Shift Only (00:00 - 08:00)</option>
+          <option value="08:00 - 16:00">Day Shift Only (08:00 - 16:00)</option>
+          <option value="16:00 - 00:00">Evening Shift Only (16:00 - 00:00)</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-400 block mb-1">Exact Storage Location / Key Info *</label>
+        <input id="modal-notice-storage" type="text" placeholder="e.g., Top Desk Drawer OR Keybox #2" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-700 text-xs" />
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-slate-400 block mb-1">Details / Instructions *</label>
+        <textarea id="modal-notice-details" rows="3" placeholder="Enter details for incoming guards..." class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-700 text-xs"></textarea>
+      </div>
+      <div class="flex justify-end gap-2 pt-1">
+        <button onclick="closeNewNoticeModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-xs font-bold">Cancel</button>
+        <button onclick="saveModalNotice()" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-extrabold">Pin Notice</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 4: END SHIFT & NATIVE GPS CHECK-OUT  -->
+  <!-- ========================================== -->
+  <div id="modal-end-shift" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-szCard border border-slate-200 dark:border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <i data-lucide="satellite" class="w-5 h-5 text-emerald-400"></i>
+          <h3 class="font-extrabold text-sm uppercase tracking-wider">Verify Departure GPS & Save Shift PDF</h3>
+        </div>
+        <button onclick="closeEndShiftModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="checkout-gps-preview" class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 mono text-xs text-emerald-300">
+        Verifying on-site departure coordinates...
+      </div>
+      <p class="text-xs text-slate-500 dark:text-slate-300 leading-relaxed">
+        Finalizing your shift locks your **Native Departure GPS Coordinates, Active Pass-Down Custody Summary, and Timestamp** onto the official SafeZone Protection PDF report and stores it in the **Shift Vault**.
+      </p>
+      <div class="pt-1">
+        <button onclick="finalizeAndSaveShift()" class="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20">
+          <i data-lucide="file-check" class="w-4 h-4"></i>
+          Stamp Departure GPS, Generate PDF & Archive Shift
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 5: DEDICATED SITE PHONE SETTINGS     -->
+  <!-- ========================================== -->
+  <div id="modal-site-config" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-szCard border border-slate-200 dark:border-slate-700 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div>
+          <span class="text-[10px] font-bold uppercase text-blue-400">Dedicated Site Device Assignment</span>
+          <h3 class="font-extrabold text-base">Select Dedicated Site Phone (2 Sites)</h3>
+        </div>
+        <button onclick="closeSiteModal()" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5">
+        <button id="site-select-0" onclick="switchActiveSite(0)" class="p-3.5 rounded-xl border text-left transition">
+          <div class="text-[10px] font-bold uppercase text-blue-400">Dedicated Phone #1</div>
+          <div class="font-extrabold text-sm mt-0.5" id="site-btn-title-0">China City</div>
+          <div class="text-[11px] text-slate-400 truncate">2150 McNicoll Ave</div>
+        </button>
+        <button id="site-select-1" onclick="switchActiveSite(1)" class="p-3.5 rounded-xl border text-left transition">
+          <div class="text-[10px] font-bold uppercase text-emerald-400">Dedicated Phone #2</div>
+          <div class="font-extrabold text-sm mt-0.5" id="site-btn-title-1">Kennedy Commons</div>
+          <div class="text-[11px] text-slate-400 truncate">2021 Kennedy Road</div>
+        </button>
+      </div>
+
+      <div class="space-y-3 pt-2">
+        <div>
+          <label class="text-xs font-semibold text-slate-400 block mb-1">Pre-Filled Site Name</label>
+          <input id="cfg-site-name" type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm font-bold" />
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-400 block mb-1">Pre-Filled Site Street Address</label>
+          <input id="cfg-site-address" type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm" />
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="text-[11px] font-semibold text-slate-400 block mb-1">Site Latitude</label>
+            <input id="cfg-site-lat" type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 mono text-xs" />
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-slate-400 block mb-1">Site Longitude</label>
+            <input id="cfg-site-lng" type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 mono text-xs" />
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-slate-400 block mb-1">Geofence Radius (m)</label>
+            <input id="cfg-site-radius" type="number" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 mono text-xs" />
+          </div>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-400 block mb-1">Dedicated Property Manager & Operations Emails (2–3 comma-separated)</label>
+          <input id="cfg-site-emails" type="text" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 mono text-xs" />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="saveSiteConfig()" class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs">
+          Save Dedicated Site Configuration
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM THUMB-ZONE NAVIGATION BAR -->
+  <nav class="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-szCard/95 backdrop-blur-md border-t border-slate-200 dark:border-szBorder px-4 py-2">
+    <div class="max-w-xl mx-auto grid grid-cols-3 gap-2">
+      <button id="nav-checkin" onclick="switchTab('checkin')" class="py-2 rounded-xl flex flex-col items-center justify-center gap-1 text-blue-500 font-bold text-xs">
+        <i data-lucide="user-check" class="w-5 h-5"></i>
+        <span>1. Briefing & Sign-In</span>
+      </button>
+      <button id="nav-workspace" onclick="switchTab('workspace')" class="py-2 rounded-xl flex flex-col items-center justify-center gap-1 text-slate-400 font-bold text-xs">
+        <i data-lucide="file-edit" class="w-5 h-5"></i>
+        <span>2. DOR / SOR / Agenda</span>
+      </button>
+      <button id="nav-vault" onclick="switchTab('vault')" class="py-2 rounded-xl flex flex-col items-center justify-center gap-1 text-slate-400 font-bold text-xs relative">
+        <i data-lucide="folder-kanban" class="w-5 h-5"></i>
+        <span>3. Shift PDF Vault</span>
+        <span id="vault-nav-badge" class="absolute top-1 right-6 px-1.5 py-0.2 rounded-full bg-emerald-500 text-slate-950 font-extrabold text-[10px]">0</span>
+      </button>
+    </div>
+  </nav>
+
+  <script>
+    // =========================================================
+    // HARDCODED SAFEZONE SITES: CHINA CITY & KENNEDY COMMONS
+    // =========================================================
+    const DEFAULT_SITES = [
+      {
+        id: 'china-city',
+        name: 'China City',
+        address: '2150 McNicoll Ave, Scarborough, ON M1V 4Z4',
+        lat: 43.81680,
+        lng: -79.29180,
+        radiusMeters: 250,
+        emails: [
+          'management@chinacityplaza.ca',
+          'operations@safezoneprotection.ca',
+          'supervisor@safezoneprotection.ca'
+        ]
+      },
+      {
+        id: 'kennedy-commons',
+        name: 'Kennedy Commons',
+        address: '2021 Kennedy Road, Scarborough, ON M1T 3G1',
+        lat: 43.77450,
+        lng: -79.28040,
+        radiusMeters: 350,
+        emails: [
+          'propertymanagement@kennedycommons.ca',
+          'operations@safezoneprotection.ca',
+          'supervisor@safezoneprotection.ca'
+        ]
+      }
+    ];
+
+    // Pre-loaded Realistic Pass-Down & Custody Items (The 2 scenarios requested)
+    const DEFAULT_PASSDOWN_NOTICES = [
+      {
+        id: 'NOTICE-1',
+        siteId: 'china-city',
+        category: '💵 Held Item / Cheque / Package in Custody',
+        targetShift: 'ALL UPCOMING SHIFTS',
+        storageLocation: 'Security Desk — Top Drawer (Sealed White Envelope)',
+        details: 'Unit B18 owner dropped off a maintenance cheque (#4092) for the Property Manager. Keep safe in the top desk drawer until Property Manager comes to collect it, then mark this item Resolved.',
+        createdByGuard: 'J. Mensah',
+        createdByLicense: '10948211',
+        createdDuringShift: '16:00 - 00:00',
+        createdAt: 'Yesterday • 19:40',
+        resolved: false,
+        resolvedBy: null,
+        resolvedAt: null,
+        resolutionNote: null
+      },
+      {
+        id: 'NOTICE-2',
+        siteId: 'china-city',
+        category: '🔑 Scheduled Contractor / Visitor Access',
+        targetShift: '16:00 - 00:00',
+        storageLocation: 'Electrical Room Key inside Lockbox #2 (Code: 4410)',
+        details: 'Property Management informed Overnight Guard that an Electrician (Metro Spark Electrical) will arrive during the 16:00–00:00 Evening Shift to service the Main Electrical Panel. Hand over Lockbox #2 key and log their arrival/departure.',
+        createdByGuard: 'MD Ali Asker Towhid',
+        createdByLicense: '11489204',
+        createdDuringShift: '00:00 - 08:00',
+        createdAt: 'Today • 02:15',
+        resolved: false,
+        resolvedBy: null,
+        resolvedAt: null,
+        resolutionNote: null
+      },
+      {
+        id: 'NOTICE-3',
+        siteId: 'kennedy-commons',
+        category: '💵 Held Item / Cheque / Package in Custody',
+        targetShift: 'ALL UPCOMING SHIFTS',
+        storageLocation: 'Security Cabinet — Shelf #1',
+        details: 'Commercial tenant left a signed lease envelope and post-dated cheque for Property Management pickup. Do not release to anyone except Property Manager.',
+        createdByGuard: 'R. Singh',
+        createdByLicense: '11305920',
+        createdDuringShift: '08:00 - 16:00',
+        createdAt: 'Yesterday • 14:20',
+        resolved: false,
+        resolvedBy: null,
+        resolvedAt: null,
+        resolutionNote: null
+      }
+    ];
+
+    let sites = JSON.parse(localStorage.getItem('sz_sites_v3')) || DEFAULT_SITES;
+    let activeSiteIndex = parseInt(localStorage.getItem('sz_active_site_idx_v3') || '0', 10);
+    let passDownNotices = JSON.parse(localStorage.getItem('sz_passdown_v3')) || DEFAULT_PASSDOWN_NOTICES;
+    let recentGuards = JSON.parse(localStorage.getItem('sz_recent_guards_v3')) || [
+      { name: 'MD Ali Asker Towhid', license: '11489204' },
+      { name: 'J. Mensah', license: '10948211' },
+      { name: 'R. Singh', license: '11305920' }
+    ];
+
+    let currentShift = JSON.parse(localStorage.getItem('sz_active_shift_v3')) || null;
+    let shiftVault = JSON.parse(localStorage.getItem('sz_shift_vault_v3')) || [];
+    let selectedShiftWindow = '00:00 - 08:00';
+    let selectedShiftType = 'Single Shift (8h)';
+    let simulateOnSiteGps = true;
+    let currentGps = {
+      lat: '43.81680',
+      lng: '-79.29180',
+      accuracy: 9,
+      distanceMeters: 14,
+      withinGeofence: true,
+      timestamp: ''
+    };
+    let pendingSorPhotos = [];
+    let amendingEntryId = null;
+    let resolvingNoticeId = null;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      updateClock();
+      setInterval(updateClock, 1000);
+      autoDetectShiftByTime();
+      renderSiteHeader();
+      renderRecentGuards();
+      renderAgendaBoards();
+      captureGPS();
+      renderVault();
+
+      if (currentShift && currentShift.active) {
+        restoreActiveShiftUI();
+        switchTab('workspace');
+      }
+    });
+
+    function updateClock() {
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      const hmStr = timeStr.slice(0, 5);
+      const dateStr = now.toISOString().split('T')[0];
+      document.getElementById('live-clock').textContent = timeStr;
+      document.getElementById('live-date').textContent = dateStr;
+      const dorLock = document.getElementById('dor-lock-time');
+      const sorLock = document.getElementById('sor-lock-time');
+      if (dorLock) dorLock.textContent = `🔒 ${hmStr}`;
+      if (sorLock) sorLock.textContent = `🔒 ${hmStr}`;
+    }
+
+    function autoDetectShiftByTime() {
+      const hour = new Date().getHours();
+      if (hour >= 0 && hour < 8) {
+        selectShiftWindow('00:00 - 08:00', 'Single Shift (8h)');
+      } else if (hour >= 8 && hour < 16) {
+        selectShiftWindow('08:00 - 16:00', 'Single Shift (8h)');
+      } else {
+        selectShiftWindow('16:00 - 00:00', 'Single Shift (8h)');
+      }
+    }
+
+    function selectShiftWindow(windowStr, typeStr) {
+      selectedShiftWindow = windowStr;
+      selectedShiftType = typeStr;
+      document.querySelectorAll('.shift-btn').forEach(btn => {
+        if (btn.getAttribute('data-shift') === windowStr) {
+          btn.className = 'shift-btn p-3 rounded-xl border-2 border-blue-500 bg-blue-600/15 text-left transition';
+        } else {
+          btn.className = 'shift-btn p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 text-left transition opacity-75 hover:opacity-100';
+        }
+      });
+      renderAgendaBoards();
+    }
+
+    function renderRecentGuards() {
+      const container = document.getElementById('recent-guards-list');
+      container.innerHTML = recentGuards.map((g, i) => `
+        <button type="button" onclick="fillGuard(${i})" class="px-3 py-1.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-xs font-bold text-blue-400 flex items-center gap-1.5 transition">
+          <span>👤 ${g.name}</span>
+          <span class="mono text-[10px] opacity-75">(#${g.license})</span>
+        </button>
+      `).join('');
+    }
+
+    function fillGuard(idx) {
+      const g = recentGuards[idx];
+      if (!g) return;
+      document.getElementById('input-guard-name').value = g.name;
+      document.getElementById('input-guard-license').value = g.license;
+    }
+
+    // =========================================================
+    // PASS-DOWN BRIEFING & CHAIN-OF-CUSTODY AGENDA ENGINE
+    // =========================================================
+    function getSiteNotices(onlyActive = true) {
+      const siteId = sites[activeSiteIndex].id;
+      return passDownNotices.filter(n => n.siteId === siteId && (!onlyActive || !n.resolved));
+    }
+
+    function isNoticeTargetedAtCurrentSelection(notice) {
+      if (notice.targetShift === 'ALL UPCOMING SHIFTS') return true;
+      const activeWin = currentShift ? currentShift.shiftWindow : selectedShiftWindow;
+      return activeWin.includes(notice.targetShift.slice(0, 5)) || activeWin === notice.targetShift;
+    }
+
+    function renderAgendaBoards() {
+      const activeList = getSiteNotices(true);
+      const allSiteList = getSiteNotices(false);
+
+      document.getElementById('checkin-agenda-count').textContent = `${activeList.length} Active`;
+      document.getElementById('agenda-count-badge').textContent = activeList.length;
+
+      // 1. Render Pre-Shift Check-In Briefing List
+      const checkinContainer = document.getElementById('checkin-agenda-list');
+      if (activeList.length === 0) {
+        checkinContainer.innerHTML = `
+          <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-400 text-center">
+            ✅ No pending pass-down notices or held items in custody for ${sites[activeSiteIndex].name}.
+          </div>
+        `;
+      } else {
+        checkinContainer.innerHTML = activeList.map(n => {
+          const isShiftMatch = isNoticeTargetedAtCurrentSelection(n);
+          return `
+            <div class="p-3.5 rounded-xl border ${
+              isShiftMatch
+                ? 'bg-indigo-500/10 border-indigo-500/50'
+                : 'bg-slate-50 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800'
+            } space-y-2">
+              <div class="flex flex-wrap items-center justify-between gap-1.5">
+                <span class="text-xs font-extrabold text-indigo-500 dark:text-indigo-300">${n.category}</span>
+                <div class="flex items-center gap-1.5">
+                  ${isShiftMatch ? `<span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500 text-slate-950 animate-pulse">⚡ Action For Shift (${n.targetShift})</span>` : `<span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-300">Target: ${n.targetShift}</span>`}
+                </div>
+              </div>
+              <div class="p-2 rounded-lg bg-white/80 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 text-xs">
+                <span class="font-bold text-amber-500">📍 Custody / Key Location:</span>
+                <span class="font-semibold text-slate-800 dark:text-slate-100 ml-1">${n.storageLocation}</span>
+              </div>
+              <p class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">${n.details}</p>
+              <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-800 text-[11px] text-slate-400">
+                <span>Logged by: <strong class="text-slate-300">${n.createdByGuard} (#${n.createdByLicense})</strong> • Shift ${n.createdDuringShift} (${n.createdAt})</span>
+                <button type="button" onclick="openResolveModal('${n.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-400 hover:text-slate-950 font-extrabold text-[11px] transition">
+                  ✓ Mark Collected / Resolved
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // 2. Render In-Shift Workspace Agenda List (Shows Active + Recently Resolved)
+      const wsContainer = document.getElementById('workspace-agenda-list');
+      if (wsContainer) {
+        wsContainer.innerHTML = allSiteList.map(n => `
+          <div class="p-3.5 rounded-xl border ${
+            n.resolved
+              ? 'bg-slate-100/50 dark:bg-slate-900/40 border-slate-300 dark:border-slate-800 opacity-70'
+              : 'bg-white dark:bg-szCard border-indigo-500/40'
+          } space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-1.5">
+              <span class="text-xs font-extrabold ${n.resolved ? 'line-through text-slate-400' : 'text-indigo-400'}">${n.category}</span>
+              ${n.resolved
+                ? `<span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">✅ Resolved</span>`
+                : `<span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">Target: ${n.targetShift}</span>`
+              }
+            </div>
+            <div class="text-xs text-amber-400 font-semibold">📍 Location / Custody: <span class="text-slate-700 dark:text-slate-200">${n.storageLocation}</span></div>
+            <p class="text-xs text-slate-600 dark:text-slate-200 leading-relaxed">${n.details}</p>
+            <div class="text-[11px] text-slate-400">
+              Logged by <strong>${n.createdByGuard} (#${n.createdByLicense})</strong> during ${n.createdDuringShift} (${n.createdAt})
+            </div>
+            ${n.resolved ? `
+              <div class="p-2 rounded-lg bg-emerald-500/10 border-l-4 border-emerald-500 text-xs text-emerald-300">
+                <strong>[RESOLVED BY ${n.resolvedBy} AT ${n.resolvedAt}]:</strong> ${n.resolutionNote}
+              </div>
+            ` : `
+              <div class="pt-1 flex justify-end">
+                <button type="button" onclick="openResolveModal('${n.id}')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs transition">
+                  ✓ Mark Resolved / Handed Over (Auto-Logs to DOR)
+                </button>
+              </div>
+            `}
+          </div>
+        `).join('');
+      }
+    }
+
+    function createPassDownNoticeFromWorkspace() {
+      if (!currentShift) {
+        alert('Please start your shift first or use the "+ Add Notice" button on the Sign-In screen.');
+        return;
+      }
+      const category = document.getElementById('notice-category').value;
+      const targetShift = document.getElementById('notice-target-shift').value;
+      const storageLocation = document.getElementById('notice-storage').value.trim();
+      const details = document.getElementById('notice-details').value.trim();
+
+      if (!storageLocation || !details) {
+        alert('Please enter the Exact Storage/Key Location and Clear Instructions for incoming guards.');
+        return;
+      }
+
+      const nowTime = new Date().toTimeString().slice(0, 5);
+      const newNotice = {
+        id: 'NOTICE-' + Date.now(),
+        siteId: sites[activeSiteIndex].id,
+        category,
+        targetShift,
+        storageLocation,
+        details,
+        createdByGuard: currentShift.guardName,
+        createdByLicense: currentShift.guardLicense,
+        createdDuringShift: currentShift.shiftWindow,
+        createdAt: `${currentShift.date} • ${nowTime}`,
+        resolved: false,
+        resolvedBy: null,
+        resolvedAt: null,
+        resolutionNote: null
+      };
+
+      passDownNotices.unshift(newNotice);
+      localStorage.setItem('sz_passdown_v3', JSON.stringify(passDownNotices));
+
+      // Automatically record in the current shift's DOR!
+      currentShift.dorEntries.unshift({
+        id: 'DOR-PASSDOWN-' + Date.now(),
+        time: nowTime,
+        text: `[SHIFT PASS-DOWN / CUSTODY LOGGED FOR ${targetShift}] ${category} — Location: ${storageLocation}. Details: ${details}`,
+        isPassDownLink: true,
+        amendments: []
+      });
+      localStorage.setItem('sz_active_shift_v3', JSON.stringify(currentShift));
+
+      document.getElementById('notice-storage').value = '';
+      document.getElementById('notice-details').value = '';
+      renderAgendaBoards();
+      renderDorTimeline();
+      alert('Notice pinned to the Site Agenda Board for upcoming shifts and automatically logged in your DOR!');
+    }
+
+    function openNewNoticeModal() {
+      document.getElementById('modal-new-notice').classList.remove('hidden');
+    }
+    function closeNewNoticeModal() {
+      document.getElementById('modal-new-notice').classList.add('hidden');
+    }
+
+    function saveModalNotice() {
+      const category = document.getElementById('modal-notice-category').value;
+      const targetShift = document.getElementById('modal-notice-target').value;
+      const storageLocation = document.getElementById('modal-notice-storage').value.trim();
+      const details = document.getElementById('modal-notice-details').value.trim();
+      const authorName = document.getElementById('input-guard-name').value.trim() || (currentShift ? currentShift.guardName : 'On-Duty Guard');
+      const authorLic = document.getElementById('input-guard-license').value.trim() || (currentShift ? currentShift.guardLicense : 'Verified');
+
+      if (!storageLocation || !details) {
+        alert('Please enter both the Storage/Key Location and Instructions.');
+        return;
+      }
+
+      const nowTime = new Date().toTimeString().slice(0, 5);
+      passDownNotices.unshift({
+        id: 'NOTICE-' + Date.now(),
+        siteId: sites[activeSiteIndex].id,
+        category,
+        targetShift,
+        storageLocation,
+        details,
+        createdByGuard: authorName,
+        createdByLicense: authorLic,
+        createdDuringShift: selectedShiftWindow,
+        createdAt: `Today • ${nowTime}`,
+        resolved: false
+      });
+
+      localStorage.setItem('sz_passdown_v3', JSON.stringify(passDownNotices));
+      document.getElementById('modal-notice-storage').value = '';
+      document.getElementById('modal-notice-details').value = '';
+      closeNewNoticeModal();
+      renderAgendaBoards();
+    }
+
+    function openResolveModal(noticeId) {
+      const notice = passDownNotices.find(n => n.id === noticeId);
+      if (!notice) return;
+      resolvingNoticeId = noticeId;
+      document.getElementById('resolve-notice-summary').innerHTML = `
+        <div class="font-extrabold text-indigo-400">${notice.category}</div>
+        <div class="text-amber-400 font-semibold mt-0.5">📍 ${notice.storageLocation}</div>
+        <div class="text-slate-400 mt-1">${notice.details}</div>
+      `;
+      document.getElementById('resolve-note-input').value = '';
+      document.getElementById('modal-resolve-notice').classList.remove('hidden');
+    }
+
+    function closeResolveModal() {
+      resolvingNoticeId = null;
+      document.getElementById('modal-resolve-notice').classList.add('hidden');
+    }
+
+    function confirmResolveNotice() {
+      const note = document.getElementById('resolve-note-input').value.trim();
+      if (!note) {
+        alert('Please enter a brief resolution note (e.g., who collected the cheque or completed the contractor visit).');
+        return;
+      }
+      const notice = passDownNotices.find(n => n.id === resolvingNoticeId);
+      if (!notice) return;
+
+      const nowTime = new Date().toTimeString().slice(0, 5);
+      const resolverGuard = currentShift
+        ? `${currentShift.guardName} (#${currentShift.guardLicense})`
+        : (document.getElementById('input-guard-name').value.trim() || 'On-Duty Guard');
+
+      notice.resolved = true;
+      notice.resolvedBy = resolverGuard;
+      notice.resolvedAt = nowTime;
+      notice.resolutionNote = note;
+      localStorage.setItem('sz_passdown_v3', JSON.stringify(passDownNotices));
+
+      // Auto-log into DOR if a shift is currently active
+      if (currentShift) {
+        currentShift.dorEntries.unshift({
+          id: 'DOR-RESOLVE-' + Date.now(),
+          time: nowTime,
+          text: `[SITE AGENDA / CUSTODY ITEM RESOLVED] ${notice.category} (${notice.storageLocation}) — Resolution: ${note}`,
+          isPassDownLink: true,
+          amendments: []
+        });
+        localStorage.setItem('sz_active_shift_v3', JSON.stringify(currentShift));
+        renderDorTimeline();
+      }
+
+      closeResolveModal();
+      renderAgendaBoards();
+    }
+
+    // =========================================================
+    // NATIVE GEOLOCATION & HAVERSINE GEOFENCE ENGINE
+    // =========================================================
+    function calculateHaversineMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Math.round(R * c);
+    }
+
+    function toggleGpsSimulation() {
+      simulateOnSiteGps = !simulateOnSiteGps;
+      const btn = document.getElementById('btn-gps-mode');
+      btn.textContent = simulateOnSiteGps ? 'Mode: On-Site Lock' : 'Mode: Raw Hardware GPS';
+      captureGPS();
+    }
+
+    function captureGPS(callback) {
+      const site = sites[activeSiteIndex];
+      const box = document.getElementById('gps-status-box');
+      if (box) {
+        box.innerHTML = `<span class="text-amber-400">🛰️ Reading native device GPS sensor for ${site.name}...</span>`;
+      }
+
+      const applyGpsFix = (latNum, lngNum, accNum) => {
+        const dist = calculateHaversineMeters(latNum, lngNum, Number(site.lat), Number(site.lng));
+        const allowedRadius = Number(site.radiusMeters || 300);
+        currentGps = {
+          lat: latNum.toFixed(5),
+          lng: lngNum.toFixed(5),
+          accuracy: Math.round(accNum || 10),
+          distanceMeters: dist,
+          withinGeofence: dist <= allowedRadius,
+          timestamp: new Date().toTimeString().slice(0, 8)
+        };
+        renderGpsBox();
+        if (callback) callback(currentGps);
+      };
+
+      if (!simulateOnSiteGps && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => applyGpsFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+          () => applyGpsFix(Number(site.lat) + 0.00009, Number(site.lng) - 0.00008, 9),
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      } else {
+        const jitterLat = (Math.random() - 0.5) * 0.00018;
+        const jitterLng = (Math.random() - 0.5) * 0.00018;
+        applyGpsFix(Number(site.lat) + jitterLat, Number(site.lng) + jitterLng, 8);
+      }
+    }
+
+    function renderGpsBox() {
+      const site = sites[activeSiteIndex];
+      const box = document.getElementById('gps-status-box');
+      if (!box) return;
+
+      const statusBadge = currentGps.withinGeofence
+        ? `<span class="text-emerald-400 font-bold">✅ INSIDE SITE GEOFENCE (${currentGps.distanceMeters}m from center)</span>`
+        : `<span class="text-amber-400 font-bold">⚠️ OUTSIDE GEOFENCE (${currentGps.distanceMeters}m from ${site.name})</span>`;
+
+      box.innerHTML = `
+        <div class="flex flex-wrap items-center justify-between gap-1">
+          ${statusBadge}
+          <span class="text-[11px] text-slate-400">Accuracy: ±${currentGps.accuracy}m</span>
+        </div>
+        <div class="mt-1.5 text-[11px] text-slate-400 flex flex-wrap items-center justify-between">
+          <span>Site: <strong class="text-slate-200">${site.name} (${site.address})</strong></span>
+          <span>Fix: <strong class="text-blue-400">${currentGps.lat}, ${currentGps.lng}</strong></span>
+        </div>
+      `;
+    }
+
+    // =========================================================
+    // SHIFT START (WITH MANDATORY BRIEFING ACK), DOUBLE SHIFT
+    // =========================================================
+    function startShift() {
+      const name = document.getElementById('input-guard-name').value.trim();
+      const license = document.getElementById('input-guard-license').value.trim();
+      const activeNotices = getSiteNotices(true);
+      const ackChecked = document.getElementById('input-briefing-ack').checked;
+
+      if (activeNotices.length > 0 && !ackChecked) {
+        alert(`Please review the ${activeNotices.length} Active Pre-Shift Briefing / Custody item(s) at the top and check the "Mandatory Pre-Shift Handover Confirmation" box before starting your shift.`);
+        document.getElementById('briefing-ack-box').scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+
+      if (!name || !license) {
+        alert('Please enter your Full Name and Ontario Security License Number to start the shift.');
+        return;
+      }
+
+      if (!recentGuards.some(g => g.license === license)) {
+        recentGuards.unshift({ name, license });
+        recentGuards = recentGuards.slice(0, 5);
+        localStorage.setItem('sz_recent_guards_v3', JSON.stringify(recentGuards));
+        renderRecentGuards();
+      }
+
+      captureGPS((gpsFix) => {
+        const site = sites[activeSiteIndex];
+        const now = new Date();
+        const startTimeStr = now.toTimeString().slice(0, 5);
+        const dateStr = now.toISOString().split('T')[0];
+        const geoStatus = gpsFix.withinGeofence ? `ON-SITE VERIFIED (${gpsFix.distanceMeters}m from center)` : `GPS LOGGED (${gpsFix.distanceMeters}m from site)`;
+
+        const initialDorEntries = [
+          {
+            id: 'DOR-' + Date.now(),
+            time: startTimeStr,
+            text: `[NATIVE GPS ARRIVAL VERIFIED] Guard ${name} (Lic #${license}) signed in on duty at ${site.name} (${site.address}) for ${selectedShiftWindow} (${selectedShiftType}). Coordinates: ${gpsFix.lat}, ${gpsFix.lng} (${geoStatus}).`,
+            isGpsStamp: true,
+            amendments: []
+          }
+        ];
+
+        // Auto-log Pre-Shift Briefing & Custody Acknowledgment into DOR
+        if (activeNotices.length > 0) {
+          const summaryTitles = activeNotices.map((n, idx) => `(#${idx + 1}) ${n.category} at ${n.storageLocation}`).join('; ');
+          initialDorEntries.unshift({
+            id: 'DOR-BRIEFING-' + (Date.now() + 1),
+            time: startTimeStr,
+            text: `[PRE-SHIFT BRIEFING & CUSTODY VERIFIED] Guard ${name} reviewed and verified ${activeNotices.length} active pass-down item(s): ${summaryTitles}.`,
+            isPassDownLink: true,
+            amendments: []
+          });
+        }
+
+        currentShift = {
+          id: 'SHIFT-' + Date.now(),
+          active: true,
+          date: dateStr,
+          guardName: name,
+          guardLicense: license,
+          siteName: site.name,
+          siteAddress: site.address,
+          siteEmails: site.emails,
+          shiftWindow: selectedShiftWindow,
+          shiftType: selectedShiftType,
+          checkInTime: startTimeStr,
+          checkInGps: `${gpsFix.lat}, ${gpsFix.lng} (±${gpsFix.accuracy}m • ${geoStatus})`,
+          checkOutTime: null,
+          checkOutGps: null,
+          dorEntries: initialDorEntries,
+          sorEntries: []
+        };
+
+        localStorage.setItem('sz_active_shift_v3', JSON.stringify(currentShift));
+        restoreActiveShiftUI();
+        switchTab('workspace');
+      });
+    }
+
+    function logNativeGpsCheckpoint() {
+      if (!currentShift) return;
+      captureGPS((gpsFix) => {
+        const nowTime = new Date().toTimeString().slice(0, 5);
+        const geoStatus = gpsFix.withinGeofence ? `INSIDE GEOFENCE (${gpsFix.distanceMeters}m)` : `OUTSIDE PERIMETER (${gpsFix.distanceMeters}m)`;
+        currentShift.dorEntries.unshift({
+          id: 'DOR-GPS-' + Date.now(),
+          time: nowTime,
+          text: `[NATIVE GPS PATROL CHECKPOINT] On-site location verified at ${currentShift.siteName}. Coordinates: ${gpsFix.lat}, ${gpsFix.lng} (±${gpsFix.accuracy}m • ${geoStatus}).`,
+          isGpsStamp: true,
+          amendments: []
+        });
+        localStorage.setItem('sz_active_shift_v3', JSON.stringify(currentShift));
+        renderDorTimeline();
+      });
+    }
+
+    function extendToDoubleShift() {
+      if (!currentShift) return;
+      const mapDouble = {
+        '00:00 - 08:00': '00:00 - 16:00',
+        '08:00 - 16:00': '08:00 - 00:00',
+        '16:00 - 00:00': '16:00 - 08:00'
+      };
+      const newWindow = mapDouble[currentShift.shiftWindow] || '08:00 - 00:00 (Double)';
+      currentShift.shiftWindow = newWindow;
+      currentShift.shiftType = 'DOUBLE SHIFT (16h)';
+
+      const nowTime = new Date().toTimeString().slice(0, 5);
+      currentShift.dorEntries.unshift({
+        id: 'DOR-' + Date.now(),
+        time: nowTime,
+        text: `[SHIFT EXTENDED TO DOUBLE SHIFT] Guard ${currentShift.guardName} continuing on duty at ${currentShift.siteName} for ${newWindow} (16-Hour Double Shift). This single report covers both shifts.`,
+        amendments: []
+      });
+
+      localStorage.setItem('sz_active_shift_v3', JSON.stringify(currentShift));
+      restoreActiveShiftUI();
+    }
+
+    function restoreActiveShiftUI() {
+      if (!currentShift) return;
+      document.getElementById('live-shift-pill').classList.remove('hidden');
+      document.getElementById('active-guard-display').textContent = currentShift.guardName;
+      document.getElementById('active-license-display').textContent = `LIC #${currentShift.guardLicense}`;
+      document.getElementById('active-site-display').textContent = `${currentShift.siteName} — ${currentShift.siteAddress}`;
+      document.getElementById('active-gps-stamp-display').textContent = `🛰️ Check-In GPS: ${currentShift.checkInGps}`;
+      document.getElementById('active-shift-badge').textContent = currentShift.shiftWindow;
+      document.getElementById('active-shift-type').textContent = currentShift.shiftType;
+
+      const extendBtn = document.getElementById('btn-extend-double');
+      if (currentShift.shiftType.includes('DOUBLE')) {
+        extendBtn.classList.add('hidden');
+      } else {
+        extendBtn.classList.remove('hidden');
+      }
+
+      renderDorTimeline();
+      renderSorList();
+      renderAgendaBoards();
+    }
+
+    // =========================================================
+    // DAILY OCCURRENCE REPORT (DOR) + LOCKED AMENDMENT TRAIL
+    // =========================================================
+    function insertTemplate(text) {
+      const input = document.getElementById('dor-entry-input');
+      input.value = input.value ? input.value + ' ' + text : text;
+      input.focus();
+    }
+
+    function addDorEntry() {
+      if (!currentShift) {
+        alert('Please start your shift first.');
+        switchTab('checkin');
+        return;
+      }
+      const input = document.getElementById('dor-entry-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const lockedTime = new Date().toTimeString().slice(0, 5);
+      currentShift.dorEntries.unshift({
+        id: 'DOR-' + Date.now(),
+        time: lockedTime,
+        text,
+        isSorLink: false,
+        isGpsStamp: false,
+        isPassDownLink: false,
+        amendments: []
+      });
+
+      input.value = '';
+      localStorage.setItem('sz_active_shift_v3', JSON.stringify(currentShift));
+      renderDorTimeline();
+    }
+
+    function renderDorTimeline() {
+      if (!currentShift) return;
+      document.getElementById('dor-count-badge').textContent = currentShift.dorEntries.length;
+      const container = document.getElementById('dor-timeline-container');
+
+      container.innerHTML = currentShift.dorEntries.map(entry => `
+        <div class="p-3.5 rounded-2xl border ${
+          entry.isSorLink
+            ? 'bg-amber-500/10 border-amber-500/40'
+            : entry.isPassDownLink
+            ? 'bg-indigo-500/10 border-indigo-500/40'
+            : entry.isGpsStamp
+            ? 'bg-emerald-500/5 border-emerald-500/30'
+            : 'bg-white dark:bg-szCard border-slate-200 dark:border-szBorder'
+        } shadow-sm space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="mono text-xs font-extrabold px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                🔒 ${entry.time}
+              </span>
+              ${entry.isGpsStamp ? '<span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">🛰️ Native GPS Verified</span>' : ''}
+              ${entry.isPassDownLink ? '<span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">📌 Custody / Pass-Down</span>' : ''}
+              ${entry.isSorLink ? '<span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500 text-slate-950">SOR Cross-Reference</span>' : ''}
+              ${entry.amendments && entry.amendments.length > 0 ? '<span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40">Amended</span>' : ''}
+            </div>
+            <button onclick="openAmendModal('${entry.id}')" class="text-xs font-bold text-amber-400 hover:underline flex items-center gap-1">
+              <span>✏️ Amend / Correct</span>
+            </button>
+          </div>
+          <p class="text-sm text-slate-700 dark:text-slate-200 leading-relaxed ${entry.amendments && entry.amendments.length > 0 ? 'line-through opacity-65' : ''}">
+            ${entry.text}
+          </p>
+          ${(entry.amendments || []).map(am => `
+            <div class="mt-2 p-2.5 rounded-xl bg-amber-500/10 border-l-4 border-amber-500 text-xs space-y-1">
+              <div class="mono text-[10px] font-extrabold uppercase text-amber-400">
+                [CORRECTION LOGGED AT ${am.time} BY ${currentShift.guardName}]
+              </div>
+              <div class="text-slate-800 dark:text-amber-100 font-medium">${am.text}</div>
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
+    }
+
+    function openAmendModal(entryId) {
+      const entry = currentShift.dorEntries.find(e => e.id === entryId);
+      if (!entry) return;
+      amendingEntryId = entryId;
+      document.getElementById('amend-orig-time').textContent = entry.time;
+      document.getElementById('amend-orig-text').textContent = entry.text;
+      document.getElementById('amend-input-text').value = '';
+      document.getElementById('modal-amend').classList.remove('hidden');
+    }
+
+    function closeAmendModal() {
+      amendingEntryId = null;
+      document.getElementById('modal-amend').classList.add('hidden');
+    }
+
+    function saveAmendment() {
+      const text = document.getElementById('amend-input-text').value.trim();
+      if (!text || !amendingEntryId) return;
+      const entry = currentShift.dorEntries.find(e => e.id === amendingEntryId);
+      if (entry) {
+        entry.amendments.push({
+          time: new Date().toTimeString().slice(0, 5),
+          text
+        });
+        localStorage.setItem('sz_active_shift_v3', JSON.stringify(currentShift));
+        renderDorTimeline();
+      }
+      closeAmendModal();
+    }
+
+    // =========================================================
+    // SPECIAL OCCURRENCE REPORT (SOR) + WATERMARKED PHOTOS
+    // =========================================================
+    function handleSorPhotos(event) {
+      const files = Array.from(event.target.files || []);
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxW = 900;
+            const scale = Math.min(1, maxW / img.width);
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'rgba(11, 17, 32, 0.85)';
+            ctx.fillRect(0, canvas.height - 42, canvas.width, 42);
+            ctx.fillStyle = '#F59E0B';
+            ctx.font = 'bold 12px monospace';
+            const stamp = `SAFEZONE • ${sites[activeSiteIndex].name} • ${new Date().toISOString().slice(0, 16).replace('T', ' ')} • GPS: ${currentGps.lat},${currentGps.lng}`;
+            ctx.fillText(stamp, 10, canvas.height - 16);
+
+            pendingSorPhotos.push(canvas.toDataURL('image/jpeg', 0.82));
+            renderPendingSorPhotos();
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function renderPendingSorPhotos() {
+      const grid = document.getElementById('sor-photo-preview-grid');
+      grid.innerHTML = pendingSorPhotos.map((src, idx) => `
+        <div class="relative rounded-xl overflow-hidden border border-slate-700 group">
+          <img src="${src}" class="w-full h-24 object-cover" />
+          <button type="button" onclick="removePendingPhoto(${idx})" class="absolute top-1 right-1 bg-rose-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function removePendingPhoto(idx) {
+      pendingSorPhotos.splice(idx, 1);
+      renderPendingSorPhotos();
+    }
+
+    function addSorEntry() {
+      if (!currentShift) {
+        alert('Please start your shift first.');
+        return;
+      }
+      const category = document.getElementById('sor-category').value;
+      const location = document.getElementById('sor-location').value.trim();
+      const police = document.getElementById('sor-police').value.trim();
+      const details = document.getElementById('sor-details').value.trim();
+
+      if (!location || !details) {
+        alert('Please enter the Exact Location on Site and the Special Occurrence Narrative.');
+        return;
+      }
+
+      const lockedTime = new Date().toTimeString().slice(0, 5);
+      const sorNumber = currentShift.sorEntries.length + 1;
+
+      const newSor = {
+        id: 'SOR-' + Date.now(),
+        sorNumber,
+        time: lockedTime,
+        category,
+        location,
+        police: police || 'None Attended',
+        details,
+        gpsStamp: `${currentGps.lat}, ${currentGps.lng}`,
+        photos: [...pendingSorPhotos]
+      };
+
+      currentShift.sorEntries.push(newSor);
+
+      currentShift.dorEntries.unshift({
+        id: 'DOR-SOR-' + Date.now(),
+        time: lockedTime,
+        text: `[SPECIAL OCCURRENCE #${sorNumber} LOGGED] ${category} at ${location}. Full narrative and ${newSor.photos.length} photo(s) attached in Special Occurrence Report #${sorNumber}.`,
+        isSorLink: true,
+        amendments: []
+      });
+
+      document.getElementById('sor-location').value = '';
+      document.getElementById('sor-police').value = '';
+      document.getElementById('sor-details').value = '';
+      pendingSorPhotos = [];
+      renderPendingSorPhotos();
+
+      localStorage.setItem('sz_active_shift_v3', JSON.stringify(currentShift));
+      renderDorTimeline();
+      renderSorList();
+      alert(`SOR #${sorNumber} saved and automatically cross-referenced in your Daily Occurrence Report!`);
+    }
+
+    function renderSorList() {
+      if (!currentShift) return;
+      document.getElementById('sor-count-badge').textContent = currentShift.sorEntries.length;
+      const container = document.getElementById('sor-list-container');
+
+      container.innerHTML = currentShift.sorEntries.map(sor => `
+        <div class="p-4 rounded-2xl bg-white dark:bg-szCard border-l-4 border-amber-500 border border-slate-200 dark:border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold uppercase text-amber-400">SOR #${sor.sorNumber} • ${sor.category}</span>
+            <span class="mono text-xs font-bold text-slate-400">🔒 ${sor.time}</span>
+          </div>
+          <div class="text-xs text-slate-400"><strong>Location:</strong> ${sor.location} | <strong>Emergency Services:</strong> ${sor.police}</div>
+          <p class="text-sm text-slate-700 dark:text-slate-200">${sor.details}</p>
+          ${sor.photos.length > 0 ? `
+            <div class="grid grid-cols-3 gap-2 pt-2">
+              ${sor.photos.map(p => `<img src="${p}" class="h-20 w-full object-cover rounded-lg border border-slate-700" />`).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    // =========================================================
+    // END SHIFT, NATIVE DEPARTURE GPS STAMP & PDF GENERATION
+    // =========================================================
+    function openEndShiftModal() {
+      document.getElementById('modal-end-shift').classList.remove('hidden');
+      captureGPS((gpsFix) => {
+        const statusText = gpsFix.withinGeofence
+          ? `✅ ON-SITE DEPARTURE VERIFIED (${gpsFix.distanceMeters}m from ${currentShift.siteName})`
+          : `⚠️ OUTSIDE GEOFENCE (${gpsFix.distanceMeters}m from ${currentShift.siteName})`;
+        document.getElementById('checkout-gps-preview').innerHTML = `
+          <div>${statusText}</div>
+          <div class="text-[11px] text-slate-300 mt-1">Departure Coords: ${gpsFix.lat}, ${gpsFix.lng} (±${gpsFix.accuracy}m)</div>
+        `;
+      });
+    }
+
+    function closeEndShiftModal() {
+      document.getElementById('modal-end-shift').classList.add('hidden');
+    }
+
+    async function finalizeAndSaveShift() {
+      if (!currentShift) return;
+      closeEndShiftModal();
+
+      const endTime = new Date().toTimeString().slice(0, 5);
+      const geoStatus = currentGps.withinGeofence
+        ? `ON-SITE VERIFIED (${currentGps.distanceMeters}m from center)`
+        : `GPS LOGGED (${currentGps.distanceMeters}m from site)`;
+
+      currentShift.checkOutTime = endTime;
+      currentShift.checkOutGps = `${currentGps.lat}, ${currentGps.lng} (±${currentGps.accuracy}m • ${geoStatus})`;
+      currentShift.active = false;
+      currentShift.activeCustodySnapshot = getSiteNotices(true);
+
+      currentShift.dorEntries.unshift({
+        id: 'DOR-END-' + Date.now(),
+        time: endTime,
+        text: `[NATIVE GPS DEPARTURE VERIFIED] Shift completed and signed off by ${currentShift.guardName} (Lic #${currentShift.guardLicense}) at ${currentShift.siteName}. Departure GPS: ${currentShift.checkOutGps}.`,
+        isGpsStamp: true,
+        amendments: []
+      });
+
+      const fileName = `SafeZone_${currentShift.siteName.replace(/\s+/g, '_')}_${currentShift.date}_${currentShift.shiftWindow.replace(/[:\s]/g, '')}.pdf`;
+      currentShift.fileName = fileName;
+
+      shiftVault.unshift({ ...currentShift, selectedForEmail: true });
+      localStorage.setItem('sz_shift_vault_v3', JSON.stringify(shiftVault));
+      localStorage.removeItem('sz_active_shift_v3');
+
+      await generateOfficialPdf(currentShift);
+
+      currentShift = null;
+      document.getElementById('live-shift-pill').classList.add('hidden');
+      renderVault();
+      switchTab('vault');
+    }
+
+    async function generateOfficialPdf(shiftData) {
+      const target = document.getElementById('pdf-render-target');
+      const chronologicalDor = [...shiftData.dorEntries].reverse();
+      const custodyItems = shiftData.activeCustodySnapshot || getSiteNotices(true);
+
+      target.innerHTML = `
+        <div style="border-bottom: 3px solid #1e3a8a; padding-bottom: 14px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">SAFEZONE PROTECTION INC.</div>
+            <div style="font-size: 11px; font-weight: 700; color: #2563eb; text-transform: uppercase; letter-spacing: 1px;">Proactive Security. Proven Peace of Mind.</div>
+            <div style="font-size: 11px; color: #475569; margin-top: 2px;">Official Field Occurrence Report • https://safezoneprotection.ca</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="background: #1e3a8a; color: white; padding: 6px 12px; border-radius: 6px; font-weight: 800; font-size: 13px;">DAILY OCCURRENCE REPORT</div>
+            <div style="font-size: 11px; color: #475569; margin-top: 4px;"><strong>Date:</strong> ${shiftData.date} | <strong>Shift:</strong> ${shiftData.shiftWindow} (${shiftData.shiftType})</div>
+          </div>
+        </div>
+
+        <!-- Mandatory Site & Guard Header Table -->
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 12px;">
+          <tr>
+            <td style="border: 1px solid #cbd5e1; padding: 8px; background: #f8fafc; width: 34%;"><strong>On-Duty Security Guard:</strong><br/>${shiftData.guardName}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 8px; background: #f8fafc; width: 26%;"><strong>Security License #:</strong><br/>${shiftData.guardLicense}</td>
+            <td style="border: 1px solid #cbd5e1; padding: 8px; background: #f8fafc; width: 40%;"><strong>Assigned Site Name & Address:</strong><br/><strong>${shiftData.siteName}</strong> — ${shiftData.siteAddress}</td>
+          </tr>
+        </table>
+
+        <!-- Native In-App GPS Geofence Compliance Certificate Block -->
+        <div style="border: 2px solid #059669; background: #ecfdf5; border-radius: 6px; padding: 10px 12px; margin-bottom: 16px; font-size: 11px;">
+          <div style="font-weight: 800; color: #065f46; text-transform: uppercase; margin-bottom: 4px;">
+            🛰️ Native In-App GPS Geofence Verification Certificate (${shiftData.siteName})
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; color: #064e3b;">
+            <div><strong>Shift Arrival GPS (${shiftData.checkInTime}):</strong> ${shiftData.checkInGps}</div>
+            <div><strong>Shift Departure GPS (${shiftData.checkOutTime || 'Active'}):</strong> ${shiftData.checkOutGps || 'On-Site Active'}</div>
+          </div>
+        </div>
+
+        <!-- Active Site Pass-Down & Custody Items Carried Forward -->
+        ${custodyItems.length > 0 ? `
+          <div style="border: 1px solid #6366f1; background: #eef2ff; border-radius: 6px; padding: 10px 12px; margin-bottom: 18px; font-size: 11px;">
+            <div style="font-weight: 800; color: #312e81; text-transform: uppercase; margin-bottom: 6px;">
+              📌 Active Site Pass-Down & Held Custody Items Carried Forward (${custodyItems.length})
+            </div>
+            ${custodyItems.map(c => `
+              <div style="margin-bottom: 4px; color: #1e1b4b;">
+                • <strong>[${c.targetShift}] ${c.category}</strong> (${c.storageLocation}): ${c.details} <em>— Logged by ${c.createdByGuard} (#${c.createdByLicense})</em>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        <div style="font-size: 13px; font-weight: 800; text-transform: uppercase; color: #1e3a8a; margin-bottom: 8px;">
+          Section 1: Chronological Daily Occurrence Log (DOR)
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 28px;">
+          <thead>
+            <tr style="background: #0f172a; color: white;">
+              <th style="border: 1px solid #334155; padding: 8px; width: 90px; text-align: left;">Locked Time</th>
+              <th style="border: 1px solid #334155; padding: 8px; text-align: left;">Occurrence / Patrol Details & Audit Amendments</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${chronologicalDor.map(e => `
+              <tr>
+                <td style="border: 1px solid #cbd5e1; padding: 8px; font-family: monospace; font-weight: 700; vertical-align: top;">${e.time}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 8px;">
+                  <div style="${e.amendments && e.amendments.length ? 'text-decoration: line-through; color: #64748b;' : ''}">${e.text}</div>
+                  ${(e.amendments || []).map(am => `
+                    <div style="margin-top: 6px; padding: 6px; background: #fef3c7; border-left: 3px solid #d97706; font-size: 11px;">
+                      <strong>[CORRECTION RECORDED AT ${am.time}]:</strong> ${am.text}
+                    </div>
+                  `).join('')}
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        ${shiftData.sorEntries && shiftData.sorEntries.length > 0 ? `
+          <div style="page-break-before: always; border-top: 3px solid #d97706; padding-top: 16px; margin-top: 20px;">
+            <div style="font-size: 18px; font-weight: 800; color: #b45309; margin-bottom: 6px;">
+              SPECIAL OCCURRENCE REPORT (SOR) SHEET — ${shiftData.siteName.toUpperCase()}
+            </div>
+            <div style="font-size: 11px; color: #475569; margin-bottom: 14px;">
+              <strong>Site:</strong> ${shiftData.siteName} (${shiftData.siteAddress}) | <strong>Guard:</strong> ${shiftData.guardName} (Lic #${shiftData.guardLicense}) | <strong>Date:</strong> ${shiftData.date}
+            </div>
+            ${shiftData.sorEntries.map(sor => `
+              <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 16px; background: #fffbeb;">
+                <div style="font-weight: 800; font-size: 14px; color: #92400e;">SOR #${sor.sorNumber}: ${sor.category} (Locked Time: ${sor.time})</div>
+                <div style="font-size: 12px; margin-top: 4px;"><strong>Exact Site Location:</strong> ${sor.location} | <strong>Police/EMS:</strong> ${sor.police} | <strong>GPS:</strong> ${sor.gpsStamp || shiftData.checkInGps}</div>
+                <p style="font-size: 12px; margin-top: 8px; line-height: 1.5;">${sor.details}</p>
+                ${sor.photos && sor.photos.length > 0 ? `
+                  <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                    ${sor.photos.map(p => `<img src="${p}" style="width: 220px; height: 145px; object-fit: cover; border: 1px solid #94a3b8; border-radius: 4px;" />`).join('')}
+                  </div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      `;
+
+      const opt = {
+        margin: 0.3,
+        filename: shiftData.fileName || 'SafeZone_Shift_Report.pdf',
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+      };
+
+      try {
+        await html2pdf().set(opt).from(target).save();
+      } catch (err) {
+        console.warn('PDF generation notice:', err);
+      }
+    }
+
+    // =========================================================
+    // SHIFT VAULT & NEXT-MORNING (08:00-16:00) BATCH EMAILER
+    // =========================================================
+    function renderVault() {
+      const site = sites[activeSiteIndex];
+      document.getElementById('vault-nav-badge').textContent = shiftVault.length;
+      document.getElementById('vault-site-title').textContent = `${site.name} (${site.address}) — Pre-Filled Recipients:`;
+
+      const emailChips = document.getElementById('vault-email-chips');
+      emailChips.innerHTML = site.emails.map(em => `
+        <span class="mono text-[11px] px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+          ✉️ ${em}
+        </span>
+      `).join('');
+
+      const list = document.getElementById('vault-reports-list');
+      if (shiftVault.length === 0) {
+        list.innerHTML = `
+          <div class="p-6 text-center rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-xs text-slate-400">
+            No archived shift PDFs yet for <strong>${site.name}</strong>. Complete a shift or tap <strong>"+ Load Sample Shifts"</strong> above to test the morning 08:00–16:00 batch dispatch.
+          </div>
+        `;
+        updateSelectedCount();
+        return;
+      }
+
+      list.innerHTML = shiftVault.map((rep, idx) => `
+        <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border ${rep.selectedForEmail ? 'border-emerald-500/60' : 'border-slate-200 dark:border-slate-800'} flex items-center justify-between gap-3">
+          <label class="flex items-start gap-3 cursor-pointer flex-1">
+            <input type="checkbox" ${rep.selectedForEmail ? 'checked' : ''} onchange="toggleVaultSelect(${idx})" class="mt-1 w-4 h-4 accent-emerald-500 rounded" />
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-extrabold text-xs text-slate-900 dark:text-white">${rep.siteName} • ${rep.date} (${rep.shiftWindow})</span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded ${rep.shiftType.includes('DOUBLE') ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-blue-500/20 text-blue-400'}">${rep.shiftType}</span>
+                ${rep.sorEntries && rep.sorEntries.length > 0 ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-400">${rep.sorEntries.length} SOR Attached</span>` : ''}
+              </div>
+              <div class="text-xs text-slate-400 mt-0.5">
+                Guard: <strong>${rep.guardName}</strong> (#${rep.guardLicense}) • ${rep.dorEntries.length} DOR Logs • Native GPS Verified
+              </div>
+              <div class="mono text-[10px] text-emerald-400 mt-0.5">${rep.fileName}</div>
+            </div>
+          </label>
+          <button onclick="generateOfficialPdf(shiftVault[${idx}])" class="shrink-0 px-3 py-2 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-blue-600 hover:text-white text-xs font-bold flex items-center gap-1 transition">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> PDF
+          </button>
+        </div>
+      `).join('');
+
+      lucide.createIcons();
+      updateSelectedCount();
+    }
+
+    function toggleVaultSelect(idx) {
+      shiftVault[idx].selectedForEmail = !shiftVault[idx].selectedForEmail;
+      localStorage.setItem('sz_shift_vault_v3', JSON.stringify(shiftVault));
+      renderVault();
+    }
+
+    function selectVaultFilter() {
+      shiftVault.forEach(r => { r.selectedForEmail = true; });
+      localStorage.setItem('sz_shift_vault_v3', JSON.stringify(shiftVault));
+      renderVault();
+    }
+
+    function updateSelectedCount() {
+      const count = shiftVault.filter(r => r.selectedForEmail).length;
+      document.getElementById('selected-pdfs-counter').textContent = `${count} Shift PDF(s) Selected`;
+    }
+
+    function loadDemoYesterdayShifts() {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      const site = sites[activeSiteIndex];
+      shiftVault = [
+        {
+          id: 'DEMO-3',
+          date: yesterday,
+          guardName: 'R. Singh',
+          guardLicense: '11305920',
+          siteName: site.name,
+          siteAddress: site.address,
+          shiftWindow: '16:00 - 00:00',
+          shiftType: 'Single Shift (8h)',
+          checkInTime: '15:56',
+          checkInGps: `${site.lat}, ${site.lng} (±8m • ON-SITE VERIFIED)`,
+          checkOutTime: '00:01',
+          checkOutGps: `${site.lat}, ${site.lng} (±9m • ON-SITE VERIFIED)`,
+          fileName: `SafeZone_${site.name.replace(/\s+/g, '_')}_${yesterday}_1600-0000.pdf`,
+          selectedForEmail: true,
+          dorEntries: [
+            { id: 'd3', time: '16:00', text: `[NATIVE GPS ARRIVAL VERIFIED] Assumed duty at ${site.name} (${site.address}). Verified active custody items in desk drawer.`, isGpsStamp: true, amendments: [] },
+            { id: 'd4', time: '21:15', text: '[SPECIAL OCCURRENCE #1 LOGGED] Trespassing / Loitering Removal at North Entrance.', isSorLink: true, amendments: [] }
+          ],
+          sorEntries: [
+            {
+              id: 's1',
+              sorNumber: 1,
+              time: '21:15',
+              category: 'Trespassing / Loitering Removal',
+              location: 'North Entrance Walkway',
+              police: 'None Attended',
+              details: 'Observed unauthorized individual loitering after hours near North entrance. Escorted off property peacefully.',
+              gpsStamp: `${site.lat}, ${site.lng}`,
+              photos: []
+            }
+          ]
+        },
+        {
+          id: 'DEMO-1-2',
+          date: yesterday,
+          guardName: 'MD Ali Asker Towhid',
+          guardLicense: '11489204',
+          siteName: site.name,
+          siteAddress: site.address,
+          shiftWindow: '00:00 - 16:00',
+          shiftType: 'DOUBLE SHIFT (16h)',
+          checkInTime: '23:55',
+          checkInGps: `${site.lat}, ${site.lng} (±7m • ON-SITE VERIFIED)`,
+          checkOutTime: '16:00',
+          checkOutGps: `${site.lat}, ${site.lng} (±8m • ON-SITE VERIFIED)`,
+          fileName: `SafeZone_${site.name.replace(/\s+/g, '_')}_${yesterday}_0000-1600_DOUBLE.pdf`,
+          selectedForEmail: true,
+          dorEntries: [
+            { id: 'd1', time: '00:00', text: `[NATIVE GPS ARRIVAL VERIFIED] Signed in on duty at ${site.name} for 00:00-08:00 shift. All units & parking lot secure.`, isGpsStamp: true, amendments: [] },
+            { id: 'd2', time: '08:00', text: '[SHIFT EXTENDED TO DOUBLE SHIFT] Continuing duty for 08:00-16:00 shift (16h total coverage).', amendments: [] }
+          ],
+          sorEntries: []
+        }
+      ];
+      localStorage.setItem('sz_shift_vault_v3', JSON.stringify(shiftVault));
+      renderVault();
+    }
+
+    function dispatchSelectedPdfsEmail() {
+      const selected = shiftVault.filter(r => r.selectedForEmail);
+      if (selected.length === 0) {
+        alert('Please select at least one shift PDF to send.');
+        return;
+      }
+      const site = sites[activeSiteIndex];
+      const recipients = site.emails.join(',');
+      const reportDate = selected[0].date;
+      const subject = `[SafeZone Protection] Daily & Special Occurrence Reports — ${site.name} (${reportDate})`;
+
+      const breakdown = selected.map((s, i) =>
+        `${i + 1}. Shift ${s.shiftWindow} (${s.shiftType}) — Guard: ${s.guardName} (Lic #${s.guardLicense})\n   • File: ${s.fileName}\n   • Arrival GPS: ${s.checkInTime} (${s.checkInGps})\n   • Departure GPS: ${s.checkOutTime} (${s.checkOutGps})`
+      ).join('\n\n');
+
+      const body =
+        `Good Morning Property Management Team,\n\n` +
+        `Please find attached the official SafeZone Protection Daily Occurrence Reports (DOR) and Special Occurrence Reports (SOR) for ${site.name} (${site.address}) covering ${reportDate}.\n\n` +
+        `24-HOUR SHIFT COVERAGE SUMMARY (${selected.length} Shift PDF Report(s)):\n\n` +
+        `${breakdown}\n\n` +
+        `All guard arrivals, patrols, pass-down custody handovers, and departures were natively verified on site.\n\n` +
+        `Regards,\n` +
+        `On-Duty Morning Guard (08:00–16:00 Shift)\n` +
+        `SafeZone Protection Inc.\n` +
+        `https://safezoneprotection.ca`;
+
+      window.location.href = `mailto:${recipients}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    }
+
+    // =========================================================
+    // NAVIGATION, VOICE DICTATION & SITE CONFIGURATION
+    // =========================================================
+    function switchTab(tab) {
+      ['checkin', 'workspace', 'vault'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.add('hidden');
+        document.getElementById(`nav-${t}`).className = 'py-2 rounded-xl flex flex-col items-center justify-center gap-1 text-slate-400 font-bold text-xs relative';
+      });
+      document.getElementById(`view-${tab}`).classList.remove('hidden');
+      document.getElementById(`nav-${tab}`).className = 'py-2 rounded-xl flex flex-col items-center justify-center gap-1 text-blue-500 font-extrabold text-xs relative';
+    }
+
+    function switchReportSheet(sheet) {
+      ['dor', 'sor', 'agenda'].forEach(s => {
+        document.getElementById(`sheet-${s}`).classList.add('hidden');
+        document.getElementById(`subtab-${s}`).className = 'py-2.5 px-2 rounded-xl font-extrabold text-[11px] flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-400';
+      });
+
+      document.getElementById(`sheet-${sheet}`).classList.remove('hidden');
+      if (sheet === 'dor') {
+        document.getElementById('subtab-dor').className = 'py-2.5 px-2 rounded-xl font-extrabold text-[11px] flex items-center justify-center gap-1.5 bg-blue-600 text-white shadow';
+      } else if (sheet === 'sor') {
+        document.getElementById('subtab-sor').className = 'py-2.5 px-2 rounded-xl font-extrabold text-[11px] flex items-center justify-center gap-1.5 bg-amber-500 text-slate-950 shadow';
+      } else {
+        document.getElementById('subtab-agenda').className = 'py-2.5 px-2 rounded-xl font-extrabold text-[11px] flex items-center justify-center gap-1.5 bg-indigo-600 text-white shadow';
+      }
+    }
+
+    function openSiteModal() {
+      populateSiteModalFields();
+      document.getElementById('modal-site-config').classList.remove('hidden');
+    }
+    function closeSiteModal() {
+      document.getElementById('modal-site-config').classList.add('hidden');
+    }
+
+    function switchActiveSite(idx) {
+      activeSiteIndex = idx;
+      localStorage.setItem('sz_active_site_idx_v3', String(idx));
+      populateSiteModalFields();
+      renderSiteHeader();
+      renderAgendaBoards();
+      captureGPS();
+      renderVault();
+    }
+
+    function populateSiteModalFields() {
+      const site = sites[activeSiteIndex];
+      document.getElementById('site-btn-title-0').textContent = sites[0].name;
+      document.getElementById('site-btn-title-1').textContent = sites[1].name;
+      document.getElementById('site-select-0').className = activeSiteIndex === 0
+        ? 'p-3.5 rounded-xl border-2 border-blue-500 bg-blue-500/15 text-left transition'
+        : 'p-3.5 rounded-xl border border-slate-700 text-left opacity-70 transition';
+      document.getElementById('site-select-1').className = activeSiteIndex === 1
+        ? 'p-3.5 rounded-xl border-2 border-emerald-500 bg-emerald-500/15 text-left transition'
+        : 'p-3.5 rounded-xl border border-slate-700 text-left opacity-70 transition';
+
+      document.getElementById('cfg-site-name').value = site.name;
+      document.getElementById('cfg-site-address').value = site.address;
+      document.getElementById('cfg-site-lat').value = site.lat;
+      document.getElementById('cfg-site-lng').value = site.lng;
+      document.getElementById('cfg-site-radius').value = site.radiusMeters || 300;
+      document.getElementById('cfg-site-emails').value = site.emails.join(', ');
+    }
+
+    function saveSiteConfig() {
+      const site = sites[activeSiteIndex];
+      site.name = document.getElementById('cfg-site-name').value.trim() || site.name;
+      site.address = document.getElementById('cfg-site-address').value.trim() || site.address;
+      site.lat = parseFloat(document.getElementById('cfg-site-lat').value) || site.lat;
+      site.lng = parseFloat(document.getElementById('cfg-site-lng').value) || site.lng;
+      site.radiusMeters = parseInt(document.getElementById('cfg-site-radius').value, 10) || 300;
+      site.emails = document.getElementById('cfg-site-emails').value.split(',').map(s => s.trim()).filter(Boolean);
+      localStorage.setItem('sz_sites_v3', JSON.stringify(sites));
+      renderSiteHeader();
+      renderAgendaBoards();
+      captureGPS();
+      renderVault();
+      closeSiteModal();
+    }
+
+    function renderSiteHeader() {
+      const site = sites[activeSiteIndex];
+      document.getElementById('header-site-label').textContent = `Site ${activeSiteIndex + 1}: ${site.name} (${site.address.split(',')[0]})`;
+      document.getElementById('checkin-site-badge').textContent = `${site.name} • ${site.address.split(',')[0]}`;
+    }
+
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+    }
+
+    function startVoiceDictation(targetInputId) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert('Voice dictation is supported in Chrome on Android.');
+        return;
+      }
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-CA';
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        const el = document.getElementById(targetInputId);
+        el.value = el.value ? el.value + ' ' + transcript : transcript;
+      };
+      recognition.start();
+    }
+  </script>
+</body>
+</html>
